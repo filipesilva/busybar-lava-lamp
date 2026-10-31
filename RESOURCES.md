@@ -31,6 +31,27 @@ Each step below was tried on the device.
    `console.*` output has the `[JsConsole]` tag, and `[JsRunner]` shows script start and errors. The log is shared with the whole firmware, so filter by tag.
 5. `npm run app:stop`, or `POST /api/apps/quit`, quits the app.
 
+`console.log` is logged at debug level, which the log buffer does not keep. Use `console.info` or `console.error`. Their lines are tagged with the app id (see `applications/system/js_app_launcher/scenes/js_app_launcher_scene_run.c`).
+
+### Measured on the device
+
+These are microbenchmarks on firmware 1.3.1. JerryScript is an interpreter and is slow.
+
+| Operation | Cost |
+| --- | --- |
+| Empty `for` loop iteration | ~10 µs |
+| Typed array or array read + add | ~25–35 µs |
+| Division | ~50 µs |
+| `Math.round` | ~150 µs |
+| Building a 72×16 text frame (array `join`) | ~95 ms |
+| Building a 72×16 text frame (`String.fromCharCode.apply`) | ~60 ms |
+| `POST display/draw`, full-screen `xpmbitmap`, raw `fetch` | ~39 ms |
+| The same through busy-lib `DisplayDraw` | ~72 ms |
+| `POST display/draw`, 1 rectangle | ~18 ms |
+| `POST display/draw`, 12 rectangles (including `JSON.stringify`) | ~75 ms |
+
+Avoid per-pixel work in JS. 1152 pixels × a few operations already takes more than 100 ms.
+
 ## 2. Firmware repo: `../busybar-firmware`
 
 The reference for the JS runtime. The checkout is on `dev`, which is a few commits past the device. To read what the device runs, use `git show 1.3.1:<path>`. To see what changed since then, use `git log 1.3.1..dev -- applications/services/js_runner applications/services/web_server/openapi`.

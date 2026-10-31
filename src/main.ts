@@ -1,64 +1,152 @@
-import { device } from "@shared/device";
-import { column, render, type Node } from "@busy-app/busy-lib";
 import manifest from "./appmeta/manifest.json";
+import { H, POOL_H, W, spawn, step, type Blob } from "./lava";
 
-/** The name the app draws under; the device clears elements by this id. */
 const APP = manifest.id;
+const DRAW_URL = `http://${__BUSY_ADDR__}/api/display/draw`;
+const TICK_MS = 33;
+const STATS_MS = 5000;
+const ERROR_BACKOFF_MS = 1000;
 
-/** How often the screen is redrawn. */
-const TICK_MS = 1000;
+const BG = "#0A0000FF";
+const FG = "#FF1800";
+const GLOW_ALPHA = "40";
+/** Opacity steps of the leading edge, which fades in so blobs move by less than a pixel. */
+const EDGE_ALPHAS = ["00", "40", "80", "C0"];
 
-const WHITE = "#FFFFFFFF";
-const SUBTLE_WHITE = "#FFFFFF80";
-
-/**
- * The frame drawn on every tick. The screen is 72×16, so two short lines are about all that fits.
- */
-function frame(ticks: number): Node {
-  return column({ justify: "center", align: "center" }, [
-    { type: "text", id: "title", text: "Hello", font: "bold", color: WHITE },
-    {
-      type: "text",
-      id: "ticks",
-      text: String(ticks),
-      font: "small",
-      color: SUBTLE_WHITE,
-    },
-  ]);
+function rect(id: string, x: number, y: number, w: number, h: number, radius: number, color: string, z: number): string {
+  return `{"id":"${id}","type":"rectangle","x":${x},"y":${y},"width":${w},"height":${h},"radius":${radius},"fill":"solid","fill_colors":["${color}"],"border_width":0,"z_index":${z}}`;
 }
 
-/** Sends one frame to the device. */
-async function draw(ticks: number): Promise<void> {
-  const elements = render(frame(ticks));
-  await device.DisplayDraw({ application_name: APP, priority: 50, elements });
-}
+/** Moving blobs stretch along their path, up to this much. */
+const STRETCH_MAX = 0.4;
+const STRETCH_SPEED = 12;
+const GLOW = 2;
+
+/** Last drawn x, core y, width, height, edge y and edge opacity step of each blob, so only changes are sent. */
+const DRAWN = 6;
+const drawn = new Int16Array(DRAWN * 16).fill(-1);
 
 /**
- * Entry point, called at the end of the file: the device runs this script from top to bottom and starts nothing by itself.
+ * Elements for blobs whose drawn shape changed since the last send: the core, its glow, and a copy one pixel ahead in the
+ * direction of motion whose opacity follows the fractional position.
  */
+function moved(blobs: Blob[], out: string[]): void {
+  for (let i = 0; i < blobs.length; i++) {
+    const b = blobs[i];
+    let s = (b.vy < 0 ? -b.vy : b.vy) / STRETCH_SPEED;
+    if (s > STRETCH_MAX) s = STRETCH_MAX;
+    const w = (2 * b.r * (1 - 0.4 * s) + 0.5) | 0;
+    const h = (2 * b.r * (1 + s) + 0.5) | 0;
+    const x = (b.x - w / 2 + 0.5) | 0;
+    const top = b.y - h / 2;
+    const floor = ((top + 32) | 0) - 32;
+    const frac = top - floor;
+    const down = b.vy >= 0;
+    const y = down ? floor : floor + 1;
+    const edgeY = down ? floor + 1 : floor;
+    const q = ((down ? frac : 1 - frac) * EDGE_ALPHAS.length) | 0;
+
+    const k = i * DRAWN;
+    const core = drawn[k] !== x || drawn[k + 1] !== y || drawn[k + 2] !== w || drawn[k + 3] !== h;
+    if (!core && drawn[k + 4] === edgeY && drawn[k + 5] === q) continue;
+    drawn[k] = x;
+    drawn[k + 1] = y;
+    drawn[k + 2] = w;
+    drawn[k + 3] = h;
+    drawn[k + 4] = edgeY;
+    drawn[k + 5] = q;
+    const radius = (w < h ? w : h) >> 1;
+    if (core) {
+      out.push(rect(`b${i}`, x, y, w, h, radius, FG + "FF", 3));
+      out.push(rect(`g${i}`, x - GLOW, y - GLOW, w + 2 * GLOW, h + 2 * GLOW, radius + GLOW, FG + GLOW_ALPHA, 2));
+    }
+    out.push(rect(`e${i}`, x, edgeY, w, h, radius, FG + EDGE_ALPHAS[q], 3));
+  }
+}
+
 function main(): void {
-  let ticks = 0;
-  let stopped = false;
-
   const report = (err: unknown) =>
     console.error(`${APP}: ${err instanceof Error ? err.message : String(err)}`);
 
-  void draw(ticks).catch(report);
+  const blobs = spawn(6);
+  let stopped = false;
+  let inFlight = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let last = Date.now();
+  let pending: string[] = [
+    rect("bg", 0, 0, W, H, 0, BG, 0),
+    rect("pool", 0, H - POOL_H, W, POOL_H, 0, FG + "FF", 3),
+    rect("poolglow", 0, H - POOL_H - GLOW, W, GLOW, 0, FG + GLOW_ALPHA, 1),
+  ];
 
-  // Tick errors are reported, not thrown: one failed request must not stop the loop.
-  const timer = setInterval(() => {
-    ticks += 1;
-    void draw(ticks).catch(report);
-  }, TICK_MS);
+  let ticks = 0;
+  let sends = 0;
+  let sent = 0;
+  let computeMs = 0;
+  let drawMs = 0;
+  let statsAt = last;
 
-  // Back leaves the app. Once the timer is cleared and the handler detached, nothing keeps it alive and the device takes the screen back.
+  function send(elements: string[]): void {
+    inFlight = true;
+    const start = Date.now();
+    sends++;
+    sent += elements.length;
+    fetch(DRAW_URL, {
+      method: "POST",
+      body: `{"application_name":"${APP}","priority":50,"elements":[${elements.join(",")}]}`,
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`draw HTTP ${res.status}`);
+        return 0;
+      })
+      .catch((err) => {
+        report(err);
+        return ERROR_BACKOFF_MS;
+      })
+      .then((delay) => {
+        drawMs += Date.now() - start;
+        inFlight = false;
+        if (delay && !stopped) {
+          if (timer !== undefined) clearTimeout(timer);
+          timer = setTimeout(tick, delay);
+        }
+      });
+  }
+
+  function tick(): void {
+    timer = undefined;
+    if (stopped) return;
+    const start = Date.now();
+    step(blobs, Math.min((start - last) / 1000, 0.1));
+    last = start;
+    if (!inFlight) {
+      moved(blobs, pending);
+      if (pending.length > 0) {
+        send(pending);
+        pending = [];
+      }
+    }
+    const end = Date.now();
+    computeMs += end - start;
+    ticks++;
+    if (end - statsAt >= STATS_MS) {
+      const secs = (end - statsAt) / 1000;
+      console.info(
+        `${APP}: ${(sends / secs).toFixed(1)} draws/s, ${(sent / Math.max(sends, 1)).toFixed(1)} el/draw, ` +
+          `${(ticks / secs).toFixed(1)} ticks/s, tick ${(computeMs / ticks).toFixed(1)} ms, draw ${(drawMs / Math.max(sends, 1)).toFixed(1)} ms`,
+      );
+      ticks = sends = sent = computeMs = drawMs = 0;
+      statsAt = end;
+    }
+    if (timer === undefined) timer = setTimeout(tick, Math.max(0, TICK_MS - (end - start)));
+  }
+
+  tick();
+
   const unbind = listen("input", (event) => {
     if (stopped || event.key !== "back" || event.action !== "short") return;
-
     stopped = true;
-    clearInterval(timer);
-
-    // Not detached from inside the handler itself: with nothing else left the unbind stops the app on the spot, while this handler is still running.
+    if (timer !== undefined) clearTimeout(timer);
     setTimeout(unbind, 0);
   });
 }
