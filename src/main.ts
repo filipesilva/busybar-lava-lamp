@@ -12,18 +12,46 @@ const ERROR_BACKOFF_MAX_MS = 8000;
 /** "version" in settings.json. */
 const SETTINGS_VERSION = 3;
 /** Defaults for the settings, as #RRGGBB. */
-const BG = "#280000";
+const BG = "#000000";
 const FG = "#FF1800";
 const SPEED = 0.4;
 const GLOW_ALPHA = "40";
+/** The lamp is lit from below: the background gets this much of the lava colour at the bottom. */
+const LIT = 0.5;
+/** Rows where the background bands start; each band is a linear gradient, together they fade like light from a bulb. */
+const BANDS = [0, 6, 11, H];
 
 /** A setting colour as #RRGGBB; our own opacity is appended when drawing. */
 function color(value: unknown, fallback: string): string {
   return typeof value === "string" && /^#[0-9A-Fa-f]{6}/.test(value) ? value.slice(0, 7) : fallback;
 }
 
+/** `a` moved towards `b` by `t`, both as #RRGGBB. */
+function mix(a: string, b: string, t: number): string {
+  let out = "#";
+  for (let i = 1; i < 7; i += 2) {
+    const ca = parseInt(a.slice(i, i + 2), 16);
+    const cb = parseInt(b.slice(i, i + 2), 16);
+    out += (0x100 + Math.round(ca + (cb - ca) * t)).toString(16).slice(1);
+  }
+  return out;
+}
+
 function rect(id: string, x: number, y: number, w: number, h: number, radius: number, color: string, z: number): string {
   return `{"id":"${id}","type":"rectangle","x":${x},"y":${y},"width":${w},"height":${h},"radius":${radius},"fill":"solid","fill_colors":["${color}"],"border_width":0,"z_index":${z}}`;
+}
+
+function background(bg: string, fg: string): string[] {
+  const shade = (y: number) => mix(bg, fg, LIT * (y / (H - 1)) ** 2);
+  const out: string[] = [];
+  for (let i = 0; i + 1 < BANDS.length; i++) {
+    const y = BANDS[i];
+    const h = BANDS[i + 1] - y;
+    out.push(
+      `{"id":"bg${i}","type":"rectangle","x":0,"y":${y},"width":${W},"height":${h},"radius":0,"fill":"gradient_v","fill_colors":["${shade(y)}FF","${shade(y + h - 1)}FF"],"border_width":0,"z_index":0}`,
+    );
+  }
+  return out;
 }
 
 /** Moving blobs stretch along their path, up to this much. */
@@ -190,7 +218,7 @@ function main(): void {
       const bg = color(values?.background, BG);
       speed = Number(values?.speed) || SPEED;
       statics = [
-        rect("bg", 0, 0, W, H, 0, bg + "FF", 0),
+        ...background(bg, fg),
         rect("pool", 0, H - POOL_H, W, POOL_H, 0, fg + "FF", 3),
         poolGlow(),
       ];
@@ -209,8 +237,8 @@ function main(): void {
       if (event.action !== "short") return;
       ctl.heating = !ctl.heating;
       if (statics.length > 0) {
-        statics[2] = poolGlow();
-        pending.push(statics[2]);
+        statics[statics.length - 1] = poolGlow();
+        pending.push(statics[statics.length - 1]);
       }
       return;
     }

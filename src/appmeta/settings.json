@@ -24,7 +24,7 @@
       "type": "enum",
       "label": "Background",
       "description": "Colour behind the lava",
-      "default": "#280000",
+      "default": "#000000",
       "options": [
         { "value": "#000000", "label": "Black" },
         { "value": "#280000", "label": "Dark red" },
