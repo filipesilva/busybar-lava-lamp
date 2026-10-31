@@ -164,6 +164,10 @@ function main(): void {
     if (timer === undefined) timer = setTimeout(tick, Math.max(0, TICK_MS - (end - start)));
   }
 
+  /** The heater glows through the pool while it is on. */
+  const poolGlow = () =>
+    rect("poolglow", 0, H - POOL_H - GLOW, W, GLOW, 0, fg + (ctl.heating ? GLOW_ALPHA : "00"), 1);
+
   void loadValues(APP, SETTINGS_VERSION)
     .catch((err) => {
       report(err);
@@ -176,7 +180,7 @@ function main(): void {
       statics = [
         rect("bg", 0, 0, W, H, 0, bg + "FF", 0),
         rect("pool", 0, H - POOL_H, W, POOL_H, 0, fg + "FF", 3),
-        rect("poolglow", 0, H - POOL_H - GLOW, W, GLOW, 0, fg + GLOW_ALPHA, 1),
+        poolGlow(),
       ];
       pending = statics.slice();
       last = Date.now();
@@ -187,6 +191,15 @@ function main(): void {
     if (stopped) return;
     if (event.key === "encoder") {
       turnDial(ctl, event.delta);
+      return;
+    }
+    if (event.key === "ok") {
+      if (event.action !== "short") return;
+      ctl.heating = !ctl.heating;
+      if (statics.length > 0) {
+        statics[2] = poolGlow();
+        pending.push(statics[2]);
+      }
       return;
     }
     if (event.key === "start") {

@@ -15,6 +15,8 @@ export type Blob = {
 
 /** What the user is doing to the lava. */
 export type Controls = {
+  /** The heater under the pool is on. */
+  heating: boolean;
   /** The big button is held down. */
   pushing: boolean;
   /** 0..1, how hard the button presses on the lava; follows `pushing` with some lag. */
@@ -24,7 +26,10 @@ export type Controls = {
 };
 
 const HEAT = 0.9;
+const HEAT_SIDES = 0.6;
 const COOL = 0.35;
+/** With the heater off the whole lamp cools, much faster than a real one. */
+const COOL_OFF = 3;
 const LIFT = 22;
 const FLOAT_AT = 0.5;
 const DRAG_X = 0.8;
@@ -63,7 +68,7 @@ export function spawn(n: number): Blob[] {
 }
 
 export function controls(): Controls {
-  return { pushing: false, push: 0, shear: 0 };
+  return { heating: true, pushing: false, push: 0, shear: 0 };
 }
 
 /** The big button went down: even a quick tap gives a visible shove. */
@@ -96,8 +101,12 @@ export function step(blobs: Blob[], c: Controls, dt: number): void {
 
   for (const b of blobs) {
     const mass = b.r / 3;
-    if (b.y + b.r >= H - POOL_H) b.temp += (HEAT / mass) * dt;
-    b.temp -= ((COOL * b.temp) / mass) * dt;
+    if (c.heating && b.y + b.r >= H - POOL_H) {
+      // The heater sits under the middle, so the sides warm slower.
+      const d = (2 * b.x) / W - 1;
+      b.temp += ((HEAT * (1 - HEAT_SIDES * d * d)) / mass) * dt;
+    }
+    b.temp -= (((c.heating ? COOL : COOL * COOL_OFF) * b.temp) / mass) * dt;
     b.vy += (FLOAT_AT - b.temp) * LIFT * dt;
     b.vx += (Math.random() - 0.5) * WANDER * dt;
 
