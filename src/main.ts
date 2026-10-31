@@ -66,8 +66,22 @@ const GLOW = 2;
 /** A blob still joined to the pool stretches down to it, and narrows by up to this much before it snaps. */
 const NECK_THIN = 0.3;
 
-/** Last drawn x, y, width and height of each blob (width 0 when hidden), so only changes are sent. */
-const DRAWN = 4;
+/** Blob colour follows temperature: wax above each step is drawn with the next tint, from darker to lifted towards white. */
+const TEMP_STEPS = [0.3, 0.9];
+const TEMP_TINTS = [-0.15, 0, 0.2];
+
+/** Top and bottom colours of a blob at each temperature level. */
+function palette(fg: string): string[] {
+  const out: string[] = [];
+  for (const t of TEMP_TINTS) {
+    const c = t < 0 ? mix(fg, "#000000", -t) : mix(fg, "#FFFFFF", t);
+    out.push(mix(c, "#000000", SHADE), c);
+  }
+  return out;
+}
+
+/** Last drawn x, y, width, height (width 0 when hidden) and temperature level of each blob, so only changes are sent. */
+const DRAWN = 5;
 const drawn = new Int16Array(DRAWN * 16).fill(-1);
 
 function changed(k: number, x: number, y: number, w: number, h: number): boolean {
@@ -83,8 +97,8 @@ function hidden(id: string, z: number): string {
   return rect(id, 0, 0, 1, 1, 0, "#00000000", z);
 }
 
-/** Elements for blobs whose drawn shape changed since the last send: the core and its glow. */
-function moved(blobs: Blob[], fg: string, dim: string, out: string[]): void {
+/** Elements for blobs whose drawn shape or colour changed since the last send: the core, and its glow if the shape changed. */
+function moved(blobs: Blob[], fg: string, colors: string[], out: string[]): void {
   for (let i = 0; i < blobs.length; i++) {
     const b = blobs[i];
     const k = i * DRAWN;
@@ -92,7 +106,9 @@ function moved(blobs: Blob[], fg: string, dim: string, out: string[]): void {
     let y = 0;
     let w = 0;
     let h = 0;
+    let level = 0;
     if (b.r > 0) {
+      while (level < TEMP_STEPS.length && b.temp >= TEMP_STEPS[level]) level++;
       const gap = H - POOL_H - b.y - b.r;
       const neck = b.attached && gap > 0 ? 1 - (NECK_THIN * gap) / NECK_MAX : 1;
       // A blob on a neck is shaped by the neck, not by its speed.
@@ -110,16 +126,18 @@ function moved(blobs: Blob[], fg: string, dim: string, out: string[]): void {
       y = ((top + 32.5) | 0) - 32;
       if (neck < 1) h = H - POOL_H + 1 - y;
     }
-    if (changed(k, x, y, w, h)) {
-      if (w === 0) out.push(hidden(`b${i}`, 3), hidden(`g${i}`, 2));
-      else {
-        const radius = (w < h ? w : h) >> 1;
-        out.push(
-          `{"id":"b${i}","type":"rectangle","x":${x},"y":${y},"width":${w},"height":${h},"radius":${radius},"fill":"gradient_v","fill_colors":["${dim}FF","${fg}FF"],"border_width":0,"z_index":3}`,
-        );
-        out.push(rect(`g${i}`, x - GLOW, y - GLOW, w + 2 * GLOW, h + 2 * GLOW, radius + GLOW, fg + GLOW_ALPHA, 2));
-      }
+    const shape = changed(k, x, y, w, h);
+    if (!shape && drawn[k + 4] === level) continue;
+    drawn[k + 4] = level;
+    if (w === 0) {
+      out.push(hidden(`b${i}`, 3), hidden(`g${i}`, 2));
+      continue;
     }
+    const radius = (w < h ? w : h) >> 1;
+    out.push(
+      `{"id":"b${i}","type":"rectangle","x":${x},"y":${y},"width":${w},"height":${h},"radius":${radius},"fill":"gradient_v","fill_colors":["${colors[2 * level]}FF","${colors[2 * level + 1]}FF"],"border_width":0,"z_index":3}`,
+    );
+    if (shape) out.push(rect(`g${i}`, x - GLOW, y - GLOW, w + 2 * GLOW, h + 2 * GLOW, radius + GLOW, fg + GLOW_ALPHA, 2));
   }
 }
 
@@ -130,7 +148,7 @@ function main(): void {
   const blobs = spawn(6);
   const ctl = controls();
   let fg = FG;
-  let dim = mix(FG, "#000000", SHADE);
+  let colors = palette(FG);
   let speed = SPEED;
   let stopped = false;
   let inFlight = false;
@@ -187,7 +205,7 @@ function main(): void {
     step(blobs, ctl, Math.min(((start - last) / 1000) * speed, 0.15));
     last = start;
     if (!inFlight) {
-      moved(blobs, fg, dim, pending);
+      moved(blobs, fg, colors, pending);
       if (pending.length > 0) {
         send(pending);
         pending = [];
@@ -220,7 +238,7 @@ function main(): void {
     .then((values) => {
       if (stopped) return;
       fg = color(values?.foreground, FG);
-      dim = mix(fg, "#000000", SHADE);
+      colors = palette(fg);
       const bg = color(values?.background, BG);
       speed = Number(values?.speed) || SPEED;
       statics = [
