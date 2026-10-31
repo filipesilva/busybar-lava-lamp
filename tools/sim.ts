@@ -9,6 +9,7 @@
 //   land    temperature and squash of blobs as they land on the pool.
 //   settle  blobs 30 s after the heater goes off.
 //   spin    blobs every 10 s after spinning the dial 10 clicks/s for 4 s.
+//   paths   % of rising and of falling blobs in the middle half of the lamp (50% = no preference).
 import { H, POOL_H, controls, spawn, step, turnDial, type Blob, type Controls } from "../src/lava.ts";
 
 /** Seconds per tick measured on the bar, and the Normal speed setting. */
@@ -127,6 +128,23 @@ const checks: Record<string, (runs: number) => void> = {
       run(40, (t, bs, c) => ((c.heating = t < 10), (blobs = bs)));
       console.log(alive(blobs).sort((a, b) => a.x - b.x).map(blob).join(" | "));
     }
+  },
+
+  paths(runs) {
+    let up = 0;
+    let upMid = 0;
+    let down = 0;
+    let downMid = 0;
+    for (let i = 0; i < runs; i++)
+      run(600, (_, bs) => {
+        for (const b of bs) {
+          if (b.r === 0 || b.attached || atTop(b)) continue;
+          const mid = b.x > 18 && b.x < 54 ? 1 : 0;
+          if (b.vy < -1) (up++, (upMid += mid));
+          else if (b.vy > 1) (down++, (downMid += mid));
+        }
+      });
+    console.log(`rising in the middle half ${pct(upMid, up)}, falling in the middle half ${pct(downMid, down)}`);
   },
 
   spin(runs) {

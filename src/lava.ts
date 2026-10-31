@@ -58,6 +58,8 @@ const SHEAR_STEP = 0.25;
 const SHEAR_FORCE = 80;
 const SHEAR_RELEASE = 1.5;
 
+const FLOW = 3;
+
 /** Gap between a blob and the pool, in pixels, at which its neck snaps. */
 export const NECK_MAX = 4;
 const NECK_PULL = 1.5;
@@ -153,6 +155,16 @@ export function step(blobs: Blob[], c: Controls, dt: number): void {
       const f = (c.shear * SHEAR_FORCE * dt) / mass;
       b.vx += f * Math.sin(ax) * Math.cos(ay);
       b.vy -= ((f * H) / W) * Math.cos(ax) * Math.sin(ay);
+    }
+
+    if (c.heating) {
+      // The heater drives a slow circulation: up over the middle, out along the top, down the sides, and back in along
+      // the bottom, where it drags the pool wax towards the middle too.
+      const ax = (2 * Math.PI * b.x) / W;
+      const ay = (Math.PI * b.y) / H;
+      const f = (FLOW * dt) / mass;
+      b.vx -= f * Math.sin(ax) * Math.cos(ay);
+      if (!b.attached) b.vy += ((2 * f * H) / W) * Math.cos(ax) * Math.sin(ay);
     }
 
     const gap = H - POOL_H - b.y - b.r;
