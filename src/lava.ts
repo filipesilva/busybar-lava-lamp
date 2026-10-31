@@ -7,10 +7,13 @@ export type Blob = {
   y: number;
   vx: number;
   vy: number;
+  /** 0 once merged into another blob; the slot can be reused by a split. */
   r: number;
   temp: number;
   /** 0..1, how flat the blob is pressed against the bottom. */
   squash: number;
+  /** Still joined to the pool by a neck. */
+  attached: boolean;
 };
 
 /** What the user is doing to the lava. */
@@ -50,6 +53,20 @@ const SHEAR_STEP = 0.25;
 const SHEAR_FORCE = 80;
 const SHEAR_RELEASE = 1.5;
 
+/** Gap between a blob and the pool, in pixels, at which its neck snaps. */
+export const NECK_MAX = 4;
+const NECK_PULL = 1.5;
+/** Blobs closer than this fraction of their summed radii, and moving together, merge. */
+const MERGE_AT = 0.6;
+const MERGE_DV = 8;
+/** Wax is sticky: blobs within this fraction of their summed radii pull together. */
+const REACH = 1.6;
+const COHESION = 15;
+const R_MAX = 5;
+/** A blob this big leaves part of its wax in the pool when it breaks away. */
+const R_SPLIT = 3.5;
+const SPLIT_KEEP = 0.4;
+
 export function spawn(n: number): Blob[] {
   const blobs: Blob[] = [];
   for (let i = 0; i < n; i++) {
@@ -62,6 +79,7 @@ export function spawn(n: number): Blob[] {
       r,
       temp: Math.random(),
       squash: 0,
+      attached: false,
     });
   }
   return blobs;
@@ -92,6 +110,7 @@ export function turnDial(c: Controls, delta: number): void {
  * The heater warms blobs touching the pool; everything cools; warm blobs float. Bigger blobs change temperature slower.
  * The big button pushes blobs under it down and aside, and squashes those already at the bottom.
  * The dial drags the top of the lava sideways; in the closed lamp it comes back along the bottom, as one big eddy.
+ * Blobs rise from the pool on a neck that stretches and snaps, and merge when they meet.
  */
 export function step(blobs: Blob[], c: Controls, dt: number): void {
   c.push += ((c.pushing ? 1 : 0) - c.push) * (c.pushing ? PUSH_ATTACK : PUSH_RELEASE) * dt;
@@ -100,8 +119,9 @@ export function step(blobs: Blob[], c: Controls, dt: number): void {
   if (c.shear > -0.01 && c.shear < 0.01) c.shear = 0;
 
   for (const b of blobs) {
+    if (b.r === 0) continue;
     const mass = b.r / 3;
-    if (c.heating && b.y + b.r >= H - POOL_H) {
+    if (c.heating && b.attached) {
       // The heater sits under the middle, so the sides warm slower.
       const d = (2 * b.x) / W - 1;
       b.temp += ((HEAT * (1 - HEAT_SIDES * d * d)) / mass) * dt;
@@ -126,6 +146,13 @@ export function step(blobs: Blob[], c: Controls, dt: number): void {
       b.vy -= ((f * H) / W) * Math.cos(ax) * Math.sin(ay);
     }
 
+    const gap = H - POOL_H - b.y - b.r;
+    if (!b.attached) b.attached = gap <= 0;
+    else if (gap > NECK_MAX) {
+      b.attached = false;
+      split(blobs, b);
+    } else if (gap > 0) b.vy += (NECK_PULL * gap * dt) / mass;
+
     b.vx *= 1 - DRAG_X * dt;
     b.vy *= 1 - DRAG_Y * dt;
     b.x += b.vx * dt;
@@ -141,5 +168,64 @@ export function step(blobs: Blob[], c: Controls, dt: number): void {
       if (pressed > b.squash) b.squash = pressed;
     }
     b.squash -= b.squash * SQUASH_RELAX * dt;
+  }
+  meet(blobs, dt);
+}
+
+/** A big blob breaking away from the pool leaves some of its wax behind, as a new blob. */
+function split(blobs: Blob[], b: Blob): void {
+  if (b.r < R_SPLIT) return;
+  let rest: Blob | undefined;
+  for (const o of blobs) if (o.r === 0) rest = o;
+  if (!rest) return;
+  const area = b.r * b.r;
+  b.r = Math.sqrt(area * (1 - SPLIT_KEEP));
+  rest.r = Math.sqrt(area * SPLIT_KEEP);
+  rest.x = b.x;
+  rest.y = H - rest.r + 1;
+  rest.vx = rest.vy = 0;
+  rest.temp = b.temp / 2;
+  rest.squash = 0;
+  rest.attached = true;
+}
+
+/** Nearby blobs on the same side of the pool surface pull together, and merge once they overlap and move together. */
+function meet(blobs: Blob[], dt: number): void {
+  for (let i = 0; i < blobs.length; i++) {
+    const a = blobs[i];
+    if (a.r === 0) continue;
+    for (let j = i + 1; j < blobs.length; j++) {
+      const b = blobs[j];
+      if (b.r === 0 || a.attached !== b.attached) continue;
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      const d2 = dx * dx + dy * dy;
+      const reach = (a.r + b.r) * REACH;
+      if (d2 > reach * reach) continue;
+      const near = (a.r + b.r) * MERGE_AT;
+      if (d2 > near * near) {
+        const f = (COHESION * dt) / Math.sqrt(d2);
+        a.vx -= (dx * f * 3) / a.r;
+        a.vy -= (dy * f * 3) / a.r;
+        b.vx += (dx * f * 3) / b.r;
+        b.vy += (dy * f * 3) / b.r;
+        continue;
+      }
+      const dvx = a.vx - b.vx;
+      const dvy = a.vy - b.vy;
+      if (dvx * dvx + dvy * dvy > MERGE_DV * MERGE_DV) continue;
+      const wa = a.r * a.r;
+      const wb = b.r * b.r;
+      const w = wa + wb;
+      if (w > R_MAX * R_MAX) continue;
+      a.x = (a.x * wa + b.x * wb) / w;
+      a.y = (a.y * wa + b.y * wb) / w;
+      a.vx = (a.vx * wa + b.vx * wb) / w;
+      a.vy = (a.vy * wa + b.vy * wb) / w;
+      a.temp = (a.temp * wa + b.temp * wb) / w;
+      a.squash = a.squash > b.squash ? a.squash : b.squash;
+      a.r = Math.sqrt(w);
+      b.r = 0;
+    }
   }
 }

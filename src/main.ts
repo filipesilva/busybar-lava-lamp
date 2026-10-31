@@ -1,6 +1,6 @@
 import manifest from "./appmeta/manifest.json";
 import { loadValues } from "@shared/settings";
-import { H, POOL_H, W, controls, pressPush, releasePush, spawn, step, turnDial, type Blob } from "./lava";
+import { H, NECK_MAX, POOL_H, W, controls, pressPush, releasePush, spawn, step, turnDial, type Blob } from "./lava";
 
 const APP = manifest.id;
 const DRAW_URL = `http://${__BUSY_ADDR__}/api/display/draw`;
@@ -16,8 +16,6 @@ const BG = "#280000";
 const FG = "#FF1800";
 const SPEED = 0.4;
 const GLOW_ALPHA = "40";
-/** Opacity steps of the leading edge, which fades in so blobs move by less than a pixel. */
-const EDGE_ALPHAS = ["00", "40", "80", "C0"];
 
 /** A setting colour as #RRGGBB; our own opacity is appended when drawing. */
 function color(value: unknown, fallback: string): string {
@@ -35,50 +33,61 @@ const STRETCH_SPEED = 12;
 const DRIFT = 5;
 const GLOW = 2;
 
-/** Last drawn x, core y, width, height, edge y and edge opacity step of each blob, so only changes are sent. */
-const DRAWN = 6;
+/** A blob still joined to the pool stretches down to it, and narrows by up to this much before it snaps. */
+const NECK_THIN = 0.3;
+
+/** Last drawn x, y, width and height of each blob (width 0 when hidden), so only changes are sent. */
+const DRAWN = 4;
 const drawn = new Int16Array(DRAWN * 16).fill(-1);
 
-/**
- * Elements for blobs whose drawn shape changed since the last send: the core, its glow, and a copy one pixel ahead in the
- * direction of motion whose opacity follows the fractional position.
- */
+function changed(k: number, x: number, y: number, w: number, h: number): boolean {
+  if (drawn[k] === x && drawn[k + 1] === y && drawn[k + 2] === w && drawn[k + 3] === h) return false;
+  drawn[k] = x;
+  drawn[k + 1] = y;
+  drawn[k + 2] = w;
+  drawn[k + 3] = h;
+  return true;
+}
+
+function hidden(id: string, z: number): string {
+  return rect(id, 0, 0, 1, 1, 0, "#00000000", z);
+}
+
+/** Elements for blobs whose drawn shape changed since the last send: the core and its glow. */
 function moved(blobs: Blob[], fg: string, out: string[]): void {
   for (let i = 0; i < blobs.length; i++) {
     const b = blobs[i];
-    let s = (b.vy < 0 ? -b.vy : b.vy) / STRETCH_SPEED;
-    if (s > STRETCH_MAX) s = STRETCH_MAX;
-    let sx = ((b.vx < 0 ? -b.vx : b.vx) - DRIFT) / STRETCH_SPEED;
-    if (sx < 0) sx = 0;
-    else if (sx > STRETCH_MAX) sx = STRETCH_MAX;
-    const sq = b.squash;
-    const w = (2 * b.r * (1 + sx) * (1 - 0.4 * s) * (1 + 0.6 * sq) + 0.5) | 0;
-    const h = (2 * b.r * (1 + s) * (1 - 0.4 * sx) * (1 - 0.45 * sq) + 0.5) | 0;
-    const x = (b.x - w / 2 + 0.5) | 0;
-    // A squashed blob keeps its bottom on the floor.
-    const top = sq > 0.05 ? b.y + b.r - h : b.y - h / 2;
-    const floor = ((top + 32) | 0) - 32;
-    const frac = top - floor;
-    const down = b.vy >= 0;
-    const y = down ? floor : floor + 1;
-    const edgeY = down ? floor + 1 : floor;
-    const q = ((down ? frac : 1 - frac) * EDGE_ALPHAS.length) | 0;
-
     const k = i * DRAWN;
-    const core = drawn[k] !== x || drawn[k + 1] !== y || drawn[k + 2] !== w || drawn[k + 3] !== h;
-    if (!core && drawn[k + 4] === edgeY && drawn[k + 5] === q) continue;
-    drawn[k] = x;
-    drawn[k + 1] = y;
-    drawn[k + 2] = w;
-    drawn[k + 3] = h;
-    drawn[k + 4] = edgeY;
-    drawn[k + 5] = q;
-    const radius = (w < h ? w : h) >> 1;
-    if (core) {
-      out.push(rect(`b${i}`, x, y, w, h, radius, fg + "FF", 3));
-      out.push(rect(`g${i}`, x - GLOW, y - GLOW, w + 2 * GLOW, h + 2 * GLOW, radius + GLOW, fg + GLOW_ALPHA, 2));
+    let x = 0;
+    let y = 0;
+    let w = 0;
+    let h = 0;
+    if (b.r > 0) {
+      const gap = H - POOL_H - b.y - b.r;
+      const neck = b.attached && gap > 0 ? 1 - (NECK_THIN * gap) / NECK_MAX : 1;
+      // A blob on a neck is shaped by the neck, not by its speed.
+      let s = neck < 1 ? 0 : (b.vy < 0 ? -b.vy : b.vy) / STRETCH_SPEED;
+      if (s > STRETCH_MAX) s = STRETCH_MAX;
+      let sx = ((b.vx < 0 ? -b.vx : b.vx) - DRIFT) / STRETCH_SPEED;
+      if (sx < 0) sx = 0;
+      else if (sx > STRETCH_MAX) sx = STRETCH_MAX;
+      const sq = b.squash;
+      w = (2 * b.r * neck * (1 + sx) * (1 - 0.4 * s) * (1 + 0.6 * sq) + 0.5) | 0;
+      h = (2 * b.r * (1 + s) * (1 - 0.4 * sx) * (1 - 0.45 * sq) + 0.5) | 0;
+      x = (b.x - w / 2 + 0.5) | 0;
+      // A squashed blob keeps its bottom on the floor.
+      const top = sq > 0.05 ? b.y + b.r - h : b.y - h / 2;
+      y = ((top + 32.5) | 0) - 32;
+      if (neck < 1) h = H - POOL_H + 1 - y;
     }
-    out.push(rect(`e${i}`, x, edgeY, w, h, radius, fg + EDGE_ALPHAS[q], 3));
+    if (changed(k, x, y, w, h)) {
+      if (w === 0) out.push(hidden(`b${i}`, 3), hidden(`g${i}`, 2));
+      else {
+        const radius = (w < h ? w : h) >> 1;
+        out.push(rect(`b${i}`, x, y, w, h, radius, fg + "FF", 3));
+        out.push(rect(`g${i}`, x - GLOW, y - GLOW, w + 2 * GLOW, h + 2 * GLOW, radius + GLOW, fg + GLOW_ALPHA, 2));
+      }
+    }
   }
 }
 
