@@ -105,8 +105,8 @@ function moved(blobs: Blob[], fg: string, dim: string, out: string[]): void {
       w = (2 * b.r * neck * (1 + sx) * (1 - 0.4 * s) * (1 + 0.6 * sq) + 0.5) | 0;
       h = (2 * b.r * (1 + s) * (1 - 0.4 * sx) * (1 - 0.45 * sq) + 0.5) | 0;
       x = (b.x - w / 2 + 0.5) | 0;
-      // A squashed blob keeps its bottom on the floor.
-      const top = sq > 0.05 ? b.y + b.r - h : b.y - h / 2;
+      // A squashed blob keeps its edge on the floor or the top it is pressed against.
+      const top = sq > 0.05 ? (b.y < H / 2 ? b.y - b.r : b.y + b.r - h) : b.y - h / 2;
       y = ((top + 32.5) | 0) - 32;
       if (neck < 1) h = H - POOL_H + 1 - y;
     }

@@ -33,6 +33,7 @@ const HEAT_SIDES = 0.6;
 const COOL = 0.35;
 /** With the heater off the whole lamp cools, much faster than a real one. */
 const COOL_OFF = 3;
+const COOL_TOP = 3;
 const LIFT = 22;
 const FLOAT_AT = 0.5;
 const DRAG_X = 0.8;
@@ -48,6 +49,10 @@ const PUSH_TAP = 0.6;
 const PUSH_ATTACK = 6;
 const PUSH_RELEASE = 4;
 const SQUASH_RELAX = 3;
+/** How fast cold wax in the pool slumps flat; at 2 it stays flat until half way to floating again. */
+const SLUMP = 2;
+const SLUMP_MAX = 0.8;
+const SLUMP_EASE = 10;
 
 const SHEAR_STEP = 0.25;
 const SHEAR_FORCE = 80;
@@ -127,7 +132,10 @@ export function step(blobs: Blob[], c: Controls, dt: number): void {
       const d = (2 * b.x) / W - 1;
       b.temp += ((HEAT * (1 - HEAT_SIDES * d * d)) / mass) * dt;
     }
-    b.temp -= (((c.heating ? COOL : COOL * COOL_OFF) * b.temp) / mass) * dt;
+    let cool = c.heating ? COOL : COOL * COOL_OFF;
+    // The top of the lamp is its coolest part.
+    if (b.y <= b.r - 1) cool *= COOL_TOP;
+    b.temp -= ((cool * b.temp) / mass) * dt;
     b.vy += (FLOAT_AT - b.temp) * LIFT * dt;
     b.vx += (Math.random() - 0.5) * WANDER * dt;
 
@@ -153,6 +161,14 @@ export function step(blobs: Blob[], c: Controls, dt: number): void {
       b.attached = false;
       split(blobs, b);
     } else if (gap > 0) b.vy += (NECK_PULL * gap * dt) / mass;
+    else {
+      // Cold wax slumps flat as it sinks into the pool, fully once its centre reaches the surface; it domes up again as it warms.
+      let slump = SLUMP * (1 - b.temp / FLOAT_AT);
+      if (slump > SLUMP_MAX) slump = SLUMP_MAX;
+      const depth = -gap / b.r;
+      slump *= depth < 1 ? depth : 1;
+      if (slump > b.squash) b.squash = slump;
+    }
 
     b.vx *= 1 - DRAG_X * dt;
     b.vy *= 1 - DRAG_Y * dt;
@@ -160,9 +176,18 @@ export function step(blobs: Blob[], c: Controls, dt: number): void {
     b.y += b.vy * dt;
     if (b.x < b.r) (b.x = b.r), (b.vx = Math.abs(b.vx));
     if (b.x > W - b.r) (b.x = W - b.r), (b.vx = -Math.abs(b.vx));
-    if (b.y < b.r - 1) (b.y = b.r - 1), (b.vy = 0);
+    if (b.y <= b.r - 1) {
+      b.y = b.r - 1;
+      if (b.vy < 0) b.vy = 0;
+      // Hot wax pressed against the top slumps flat too, and rounds up again as it cools.
+      let slump = SLUMP * (b.temp / FLOAT_AT - 1);
+      if (slump > SLUMP_MAX) slump = SLUMP_MAX;
+      if (slump > b.squash) b.squash += (slump - b.squash) * SLUMP_EASE * dt;
+    }
 
-    const floor = H - b.r + 1;
+    // Blobs rest with their bottom just below the screen, or sink until their centre reaches the pool surface.
+    let floor = H - b.r + 1;
+    if (floor < H - POOL_H) floor = H - POOL_H;
     if (b.y >= floor) {
       b.y = floor;
       if (b.vy > 0) b.vy = 0;
@@ -192,7 +217,8 @@ function split(blobs: Blob[], b: Blob): void {
 
 /**
  * Blobs on the same side of the pool surface meet. In the air wax is sticky: nearby blobs pull together and merge once
- * they overlap and move together. At the pool it spreads out sideways, and blobs too big to merge push each other away.
+ * they overlap and move together. At the pool and against the top it spreads out sideways, and blobs too big to merge
+ * push each other away.
  */
 function meet(blobs: Blob[], dt: number): void {
   for (let i = 0; i < blobs.length; i++) {
@@ -211,9 +237,10 @@ function meet(blobs: Blob[], dt: number): void {
       const w = wa + wb;
       const d = Math.sqrt(d2);
 
-      if (a.attached || w > R_MAX * R_MAX) {
+      const top = a.y <= a.r - 1 && b.y <= b.r - 1;
+      if (a.attached || top || w > R_MAX * R_MAX) {
         const f = (SPREAD * dt * (1 - d / reach)) / d;
-        const fy = a.attached ? 0 : f;
+        const fy = a.attached || top ? 0 : f;
         a.vx += (dx * f * 3) / a.r;
         a.vy += (dy * fy * 3) / a.r;
         b.vx -= (dx * f * 3) / b.r;
