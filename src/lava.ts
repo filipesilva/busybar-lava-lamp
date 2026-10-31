@@ -62,6 +62,7 @@ const MERGE_DV = 8;
 /** Wax is sticky: blobs within this fraction of their summed radii pull together. */
 const REACH = 1.6;
 const COHESION = 15;
+const SPREAD = 40;
 const R_MAX = 5;
 /** A blob this big leaves part of its wax in the pool when it breaks away. */
 const R_SPLIT = 3.5;
@@ -110,7 +111,7 @@ export function turnDial(c: Controls, delta: number): void {
  * The heater warms blobs touching the pool; everything cools; warm blobs float. Bigger blobs change temperature slower.
  * The big button pushes blobs under it down and aside, and squashes those already at the bottom.
  * The dial drags the top of the lava sideways; in the closed lamp it comes back along the bottom, as one big eddy.
- * Blobs rise from the pool on a neck that stretches and snaps, and merge when they meet.
+ * Blobs rise from the pool on a neck that stretches and snaps, merge when they meet, and spread out along the pool.
  */
 export function step(blobs: Blob[], c: Controls, dt: number): void {
   c.push += ((c.pushing ? 1 : 0) - c.push) * (c.pushing ? PUSH_ATTACK : PUSH_RELEASE) * dt;
@@ -189,7 +190,10 @@ function split(blobs: Blob[], b: Blob): void {
   rest.attached = true;
 }
 
-/** Nearby blobs on the same side of the pool surface pull together, and merge once they overlap and move together. */
+/**
+ * Blobs on the same side of the pool surface meet. In the air wax is sticky: nearby blobs pull together and merge once
+ * they overlap and move together. At the pool it spreads out sideways, and blobs too big to merge push each other away.
+ */
 function meet(blobs: Blob[], dt: number): void {
   for (let i = 0; i < blobs.length; i++) {
     const a = blobs[i];
@@ -201,10 +205,24 @@ function meet(blobs: Blob[], dt: number): void {
       const dy = a.y - b.y;
       const d2 = dx * dx + dy * dy;
       const reach = (a.r + b.r) * REACH;
-      if (d2 > reach * reach) continue;
-      const near = (a.r + b.r) * MERGE_AT;
-      if (d2 > near * near) {
-        const f = (COHESION * dt) / Math.sqrt(d2);
+      if (d2 > reach * reach || d2 === 0) continue;
+      const wa = a.r * a.r;
+      const wb = b.r * b.r;
+      const w = wa + wb;
+      const d = Math.sqrt(d2);
+
+      if (a.attached || w > R_MAX * R_MAX) {
+        const f = (SPREAD * dt * (1 - d / reach)) / d;
+        const fy = a.attached ? 0 : f;
+        a.vx += (dx * f * 3) / a.r;
+        a.vy += (dy * fy * 3) / a.r;
+        b.vx -= (dx * f * 3) / b.r;
+        b.vy -= (dy * fy * 3) / b.r;
+        continue;
+      }
+
+      if (d > (a.r + b.r) * MERGE_AT) {
+        const f = (COHESION * dt) / d;
         a.vx -= (dx * f * 3) / a.r;
         a.vy -= (dy * f * 3) / a.r;
         b.vx += (dx * f * 3) / b.r;
@@ -214,10 +232,6 @@ function meet(blobs: Blob[], dt: number): void {
       const dvx = a.vx - b.vx;
       const dvy = a.vy - b.vy;
       if (dvx * dvx + dvy * dvy > MERGE_DV * MERGE_DV) continue;
-      const wa = a.r * a.r;
-      const wb = b.r * b.r;
-      const w = wa + wb;
-      if (w > R_MAX * R_MAX) continue;
       a.x = (a.x * wa + b.x * wb) / w;
       a.y = (a.y * wa + b.y * wb) / w;
       a.vx = (a.vx * wa + b.vx * wb) / w;
