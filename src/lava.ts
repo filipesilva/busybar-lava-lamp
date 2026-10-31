@@ -19,6 +19,8 @@ export type Controls = {
   pushing: boolean;
   /** 0..1, how hard the button presses on the lava; follows `pushing` with some lag. */
   push: number;
+  /** -1..1, how hard the dial drags the top of the lava; positive drags it right. */
+  shear: number;
 };
 
 const HEAT = 0.9;
@@ -39,6 +41,10 @@ const PUSH_ATTACK = 6;
 const PUSH_RELEASE = 4;
 const SQUASH_RELAX = 3;
 
+const SHEAR_STEP = 0.25;
+const SHEAR_FORCE = 80;
+const SHEAR_RELEASE = 1.5;
+
 export function spawn(n: number): Blob[] {
   const blobs: Blob[] = [];
   for (let i = 0; i < n; i++) {
@@ -57,7 +63,7 @@ export function spawn(n: number): Blob[] {
 }
 
 export function controls(): Controls {
-  return { pushing: false, push: 0 };
+  return { pushing: false, push: 0, shear: 0 };
 }
 
 /** The big button went down: even a quick tap gives a visible shove. */
@@ -70,13 +76,23 @@ export function releasePush(c: Controls): void {
   c.pushing = false;
 }
 
+/** One click of the dial; clockwise is positive. */
+export function turnDial(c: Controls, delta: number): void {
+  c.shear += delta * SHEAR_STEP;
+  if (c.shear > 1) c.shear = 1;
+  else if (c.shear < -1) c.shear = -1;
+}
+
 /**
  * The heater warms blobs touching the pool; everything cools; warm blobs float. Bigger blobs change temperature slower.
  * The big button pushes blobs under it down and aside, and squashes those already at the bottom.
+ * The dial drags the top of the lava sideways; in the closed lamp it comes back along the bottom, as one big eddy.
  */
 export function step(blobs: Blob[], c: Controls, dt: number): void {
   c.push += ((c.pushing ? 1 : 0) - c.push) * (c.pushing ? PUSH_ATTACK : PUSH_RELEASE) * dt;
   if (c.push < 0.01) c.push = 0;
+  c.shear -= c.shear * SHEAR_RELEASE * dt;
+  if (c.shear > -0.01 && c.shear < 0.01) c.shear = 0;
 
   for (const b of blobs) {
     const mass = b.r / 3;
@@ -91,6 +107,14 @@ export function step(blobs: Blob[], c: Controls, dt: number): void {
       pressed = c.push / (1 + d * d);
       b.vy += (pressed * PUSH_DOWN * dt) / mass;
       b.vx += (pressed * PUSH_OUT * (d < 0 ? -1 : 1) * dt) / mass;
+    }
+
+    if (c.shear !== 0) {
+      const ax = (Math.PI * b.x) / W;
+      const ay = (Math.PI * b.y) / H;
+      const f = (c.shear * SHEAR_FORCE * dt) / mass;
+      b.vx += f * Math.sin(ax) * Math.cos(ay);
+      b.vy -= ((f * H) / W) * Math.cos(ax) * Math.sin(ay);
     }
 
     b.vx *= 1 - DRAG_X * dt;

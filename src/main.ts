@@ -1,6 +1,6 @@
 import manifest from "./appmeta/manifest.json";
 import { loadValues } from "@shared/settings";
-import { H, POOL_H, W, controls, pressPush, releasePush, spawn, step, type Blob } from "./lava";
+import { H, POOL_H, W, controls, pressPush, releasePush, spawn, step, turnDial, type Blob } from "./lava";
 
 const APP = manifest.id;
 const DRAW_URL = `http://${__BUSY_ADDR__}/api/display/draw`;
@@ -30,6 +30,8 @@ function rect(id: string, x: number, y: number, w: number, h: number, radius: nu
 /** Moving blobs stretch along their path, up to this much. */
 const STRETCH_MAX = 0.4;
 const STRETCH_SPEED = 12;
+/** Sideways drift slower than this does not stretch. */
+const DRIFT = 5;
 const GLOW = 2;
 
 /** Last drawn x, core y, width, height, edge y and edge opacity step of each blob, so only changes are sent. */
@@ -45,9 +47,12 @@ function moved(blobs: Blob[], fg: string, out: string[]): void {
     const b = blobs[i];
     let s = (b.vy < 0 ? -b.vy : b.vy) / STRETCH_SPEED;
     if (s > STRETCH_MAX) s = STRETCH_MAX;
+    let sx = ((b.vx < 0 ? -b.vx : b.vx) - DRIFT) / STRETCH_SPEED;
+    if (sx < 0) sx = 0;
+    else if (sx > STRETCH_MAX) sx = STRETCH_MAX;
     const sq = b.squash;
-    const w = (2 * b.r * (1 - 0.4 * s) * (1 + 0.6 * sq) + 0.5) | 0;
-    const h = (2 * b.r * (1 + s) * (1 - 0.45 * sq) + 0.5) | 0;
+    const w = (2 * b.r * (1 + sx) * (1 - 0.4 * s) * (1 + 0.6 * sq) + 0.5) | 0;
+    const h = (2 * b.r * (1 + s) * (1 - 0.4 * sx) * (1 - 0.45 * sq) + 0.5) | 0;
     const x = (b.x - w / 2 + 0.5) | 0;
     // A squashed blob keeps its bottom on the floor.
     const top = sq > 0.05 ? b.y + b.r - h : b.y - h / 2;
@@ -180,6 +185,10 @@ function main(): void {
 
   const unbind = listen("input", (event) => {
     if (stopped) return;
+    if (event.key === "encoder") {
+      turnDial(ctl, event.delta);
+      return;
+    }
     if (event.key === "start") {
       // The press and release edges matter here: the lava is pushed for as long as the button is held.
       if (event.action === "press") pressPush(ctl);
