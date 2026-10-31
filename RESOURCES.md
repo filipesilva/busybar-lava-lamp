@@ -31,6 +31,18 @@ Each step below was tried on the device.
    `console.*` output has the `[JsConsole]` tag, and `[JsRunner]` shows script start and errors. The log is shared with the whole firmware, so filter by tag.
 5. `npm run app:stop`, or `POST /api/apps/quit`, quits the app.
 
+### Tools
+
+`tools/` holds helpers for tuning the app. They run on the computer, not on the bar, and the build does not include them.
+
+- `node tools/sim.ts <check> [runs]` runs the physics in `src/lava.ts` at the bar's tick rate and Normal speed, and prints numbers: `life` (blob count, snaps, merges, splits; stalls), `clump` (overlapping and stacked blobs), `dwell` (time at the top and in the pool), `land` (temperature and squash on landing), `settle` (heater off), `spin` (after the dial). The header of the file says what each prints. Add a check when a new behaviour needs measuring.
+- `node tools/sheet.mjs out.png [frames] [interval_ms] [scale]` takes screenshots over time and stacks them in one PNG.
+- `tools/log.sh [pattern] [lines]` prints matching lines from the bar's log.
+
+The device tools use `BUSY_ADDR`, `10.0.4.20` by default.
+
+The loop that worked: reproduce or tune a physics change with `tools/sim.ts` first, as many runs are cheap and the numbers are comparable. Then build, install and run on the bar, check the look with `tools/sheet.mjs` (for example, around a key press sent with `/api/input`), and check `tools/log.sh` for errors.
+
 `console.log` is logged at debug level, which the log buffer does not keep. Use `console.info` or `console.error`. Their lines are tagged with the app id (see `applications/system/js_app_launcher/scenes/js_app_launcher_scene_run.c`).
 
 ### Measured on the device
