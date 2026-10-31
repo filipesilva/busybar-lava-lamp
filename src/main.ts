@@ -1,6 +1,6 @@
 import manifest from "./appmeta/manifest.json";
 import { loadValues } from "@shared/settings";
-import { H, POOL_H, W, spawn, step, type Blob } from "./lava";
+import { H, POOL_H, W, controls, pressPush, releasePush, spawn, step, type Blob } from "./lava";
 
 const APP = manifest.id;
 const DRAW_URL = `http://${__BUSY_ADDR__}/api/display/draw`;
@@ -45,10 +45,12 @@ function moved(blobs: Blob[], fg: string, out: string[]): void {
     const b = blobs[i];
     let s = (b.vy < 0 ? -b.vy : b.vy) / STRETCH_SPEED;
     if (s > STRETCH_MAX) s = STRETCH_MAX;
-    const w = (2 * b.r * (1 - 0.4 * s) + 0.5) | 0;
-    const h = (2 * b.r * (1 + s) + 0.5) | 0;
+    const sq = b.squash;
+    const w = (2 * b.r * (1 - 0.4 * s) * (1 + 0.6 * sq) + 0.5) | 0;
+    const h = (2 * b.r * (1 + s) * (1 - 0.45 * sq) + 0.5) | 0;
     const x = (b.x - w / 2 + 0.5) | 0;
-    const top = b.y - h / 2;
+    // A squashed blob keeps its bottom on the floor.
+    const top = sq > 0.05 ? b.y + b.r - h : b.y - h / 2;
     const floor = ((top + 32) | 0) - 32;
     const frac = top - floor;
     const down = b.vy >= 0;
@@ -79,6 +81,7 @@ function main(): void {
     console.error(`${APP}: ${err instanceof Error ? err.message : String(err)}`);
 
   const blobs = spawn(6);
+  const ctl = controls();
   let fg = FG;
   let stopped = false;
   let inFlight = false;
@@ -132,7 +135,7 @@ function main(): void {
     timer = undefined;
     if (stopped) return;
     const start = Date.now();
-    step(blobs, Math.min((start - last) / 1000, 0.1));
+    step(blobs, ctl, Math.min((start - last) / 1000, 0.1));
     last = start;
     if (!inFlight) {
       moved(blobs, fg, pending);
@@ -176,7 +179,14 @@ function main(): void {
     });
 
   const unbind = listen("input", (event) => {
-    if (stopped || event.key !== "back" || event.action !== "short") return;
+    if (stopped) return;
+    if (event.key === "start") {
+      // The press and release edges matter here: the lava is pushed for as long as the button is held.
+      if (event.action === "press") pressPush(ctl);
+      else if (event.action === "release") releasePush(ctl);
+      return;
+    }
+    if (event.key !== "back" || event.action !== "short") return;
     stopped = true;
     if (timer !== undefined) clearTimeout(timer);
     setTimeout(unbind, 0);
