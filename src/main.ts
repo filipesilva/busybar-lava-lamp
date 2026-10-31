@@ -20,6 +20,8 @@ const GLOW_ALPHA = "40";
 const LIT = 0.5;
 /** Rows where the background bands start; each band is a linear gradient, together they fade like light from a bulb. */
 const BANDS = [0, 6, 11, H];
+/** Blobs are lit from below too: their tops are this much darker. */
+const SHADE = 0.4;
 
 /** A setting colour as #RRGGBB; our own opacity is appended when drawing. */
 function color(value: unknown, fallback: string): string {
@@ -82,7 +84,7 @@ function hidden(id: string, z: number): string {
 }
 
 /** Elements for blobs whose drawn shape changed since the last send: the core and its glow. */
-function moved(blobs: Blob[], fg: string, out: string[]): void {
+function moved(blobs: Blob[], fg: string, dim: string, out: string[]): void {
   for (let i = 0; i < blobs.length; i++) {
     const b = blobs[i];
     const k = i * DRAWN;
@@ -112,7 +114,9 @@ function moved(blobs: Blob[], fg: string, out: string[]): void {
       if (w === 0) out.push(hidden(`b${i}`, 3), hidden(`g${i}`, 2));
       else {
         const radius = (w < h ? w : h) >> 1;
-        out.push(rect(`b${i}`, x, y, w, h, radius, fg + "FF", 3));
+        out.push(
+          `{"id":"b${i}","type":"rectangle","x":${x},"y":${y},"width":${w},"height":${h},"radius":${radius},"fill":"gradient_v","fill_colors":["${dim}FF","${fg}FF"],"border_width":0,"z_index":3}`,
+        );
         out.push(rect(`g${i}`, x - GLOW, y - GLOW, w + 2 * GLOW, h + 2 * GLOW, radius + GLOW, fg + GLOW_ALPHA, 2));
       }
     }
@@ -126,6 +130,7 @@ function main(): void {
   const blobs = spawn(6);
   const ctl = controls();
   let fg = FG;
+  let dim = mix(FG, "#000000", SHADE);
   let speed = SPEED;
   let stopped = false;
   let inFlight = false;
@@ -182,7 +187,7 @@ function main(): void {
     step(blobs, ctl, Math.min(((start - last) / 1000) * speed, 0.15));
     last = start;
     if (!inFlight) {
-      moved(blobs, fg, pending);
+      moved(blobs, fg, dim, pending);
       if (pending.length > 0) {
         send(pending);
         pending = [];
@@ -215,6 +220,7 @@ function main(): void {
     .then((values) => {
       if (stopped) return;
       fg = color(values?.foreground, FG);
+      dim = mix(fg, "#000000", SHADE);
       const bg = color(values?.background, BG);
       speed = Number(values?.speed) || SPEED;
       statics = [
