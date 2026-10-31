@@ -61,8 +61,8 @@ const SHEAR_RELEASE = 1.5;
 /** Gap between a blob and the pool, in pixels, at which its neck snaps. */
 export const NECK_MAX = 4;
 const NECK_PULL = 1.5;
-/** Blobs closer than this fraction of their summed radii, and moving together, merge. */
-const MERGE_AT = 0.6;
+/** Blobs closer than this fraction of their summed radii touch: they merge if moving together, and bump apart if not. */
+const MERGE_AT = 0.85;
 const MERGE_DV = 8;
 /** Wax is sticky: blobs within this fraction of their summed radii pull together. */
 const REACH = 1.6;
@@ -207,7 +207,8 @@ function split(blobs: Blob[], b: Blob): void {
   const area = b.r * b.r;
   b.r = Math.sqrt(area * (1 - SPLIT_KEEP));
   rest.r = Math.sqrt(area * SPLIT_KEEP);
-  rest.x = b.x;
+  // Beside it, not under it: they cannot share the same space, and should not follow each other up the same path.
+  rest.x = b.x + (Math.random() < 0.5 ? -1 : 1) * (b.r + rest.r);
   rest.y = H - rest.r + 1;
   rest.vx = rest.vy = 0;
   rest.temp = b.temp / 2;
@@ -217,8 +218,8 @@ function split(blobs: Blob[], b: Blob): void {
 
 /**
  * Blobs on the same side of the pool surface meet. In the air wax is sticky: nearby blobs pull together and merge once
- * they overlap and move together. At the pool and against the top it spreads out sideways, and blobs too big to merge
- * push each other away.
+ * they overlap and move together. At the pool and against the top it spreads out sideways. Blobs too big to merge, that
+ * meet too fast, or that meet one pressed against the top, push each other away, as surface tension keeps them apart.
  */
 function meet(blobs: Blob[], dt: number): void {
   for (let i = 0; i < blobs.length; i++) {
@@ -237,10 +238,15 @@ function meet(blobs: Blob[], dt: number): void {
       const w = wa + wb;
       const d = Math.sqrt(d2);
 
-      const top = a.y <= a.r - 1 && b.y <= b.r - 1;
-      if (a.attached || top || w > R_MAX * R_MAX) {
+      const topA = a.y <= a.r - 1;
+      const topB = b.y <= b.r - 1;
+      const touching = d <= (a.r + b.r) * MERGE_AT;
+      const dvx = a.vx - b.vx;
+      const dvy = a.vy - b.vy;
+      const fast = dvx * dvx + dvy * dvy > MERGE_DV * MERGE_DV;
+      if (a.attached || topA || topB || w > R_MAX * R_MAX || (touching && fast)) {
         const f = (SPREAD * dt * (1 - d / reach)) / d;
-        const fy = a.attached || top ? 0 : f;
+        const fy = a.attached || (topA && topB) ? 0 : f;
         a.vx += (dx * f * 3) / a.r;
         a.vy += (dy * fy * 3) / a.r;
         b.vx -= (dx * f * 3) / b.r;
@@ -248,7 +254,7 @@ function meet(blobs: Blob[], dt: number): void {
         continue;
       }
 
-      if (d > (a.r + b.r) * MERGE_AT) {
+      if (!touching) {
         const f = (COHESION * dt) / d;
         a.vx -= (dx * f * 3) / a.r;
         a.vy -= (dy * f * 3) / a.r;
@@ -256,9 +262,6 @@ function meet(blobs: Blob[], dt: number): void {
         b.vy += (dy * f * 3) / b.r;
         continue;
       }
-      const dvx = a.vx - b.vx;
-      const dvy = a.vy - b.vy;
-      if (dvx * dvx + dvy * dvy > MERGE_DV * MERGE_DV) continue;
       a.x = (a.x * wa + b.x * wb) / w;
       a.y = (a.y * wa + b.y * wb) / w;
       a.vx = (a.vx * wa + b.vx * wb) / w;
