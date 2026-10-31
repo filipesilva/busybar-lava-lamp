@@ -1,4 +1,5 @@
 import manifest from "./appmeta/manifest.json";
+import { loadValues } from "@shared/settings";
 import { H, POOL_H, W, spawn, step, type Blob } from "./lava";
 
 const APP = manifest.id;
@@ -6,12 +7,21 @@ const DRAW_URL = `http://${__BUSY_ADDR__}/api/display/draw`;
 const TICK_MS = 33;
 const STATS_MS = 5000;
 const ERROR_BACKOFF_MS = 1000;
+const ERROR_BACKOFF_MAX_MS = 8000;
 
-const BG = "#0A0000FF";
+/** "version" in settings.json. */
+const SETTINGS_VERSION = 3;
+/** Defaults for the settings, as #RRGGBB. */
+const BG = "#280000";
 const FG = "#FF1800";
 const GLOW_ALPHA = "40";
 /** Opacity steps of the leading edge, which fades in so blobs move by less than a pixel. */
 const EDGE_ALPHAS = ["00", "40", "80", "C0"];
+
+/** A setting colour as #RRGGBB; our own opacity is appended when drawing. */
+function color(value: unknown, fallback: string): string {
+  return typeof value === "string" && /^#[0-9A-Fa-f]{6}/.test(value) ? value.slice(0, 7) : fallback;
+}
 
 function rect(id: string, x: number, y: number, w: number, h: number, radius: number, color: string, z: number): string {
   return `{"id":"${id}","type":"rectangle","x":${x},"y":${y},"width":${w},"height":${h},"radius":${radius},"fill":"solid","fill_colors":["${color}"],"border_width":0,"z_index":${z}}`;
@@ -30,7 +40,7 @@ const drawn = new Int16Array(DRAWN * 16).fill(-1);
  * Elements for blobs whose drawn shape changed since the last send: the core, its glow, and a copy one pixel ahead in the
  * direction of motion whose opacity follows the fractional position.
  */
-function moved(blobs: Blob[], out: string[]): void {
+function moved(blobs: Blob[], fg: string, out: string[]): void {
   for (let i = 0; i < blobs.length; i++) {
     const b = blobs[i];
     let s = (b.vy < 0 ? -b.vy : b.vy) / STRETCH_SPEED;
@@ -57,10 +67,10 @@ function moved(blobs: Blob[], out: string[]): void {
     drawn[k + 5] = q;
     const radius = (w < h ? w : h) >> 1;
     if (core) {
-      out.push(rect(`b${i}`, x, y, w, h, radius, FG + "FF", 3));
-      out.push(rect(`g${i}`, x - GLOW, y - GLOW, w + 2 * GLOW, h + 2 * GLOW, radius + GLOW, FG + GLOW_ALPHA, 2));
+      out.push(rect(`b${i}`, x, y, w, h, radius, fg + "FF", 3));
+      out.push(rect(`g${i}`, x - GLOW, y - GLOW, w + 2 * GLOW, h + 2 * GLOW, radius + GLOW, fg + GLOW_ALPHA, 2));
     }
-    out.push(rect(`e${i}`, x, edgeY, w, h, radius, FG + EDGE_ALPHAS[q], 3));
+    out.push(rect(`e${i}`, x, edgeY, w, h, radius, fg + EDGE_ALPHAS[q], 3));
   }
 }
 
@@ -69,15 +79,15 @@ function main(): void {
     console.error(`${APP}: ${err instanceof Error ? err.message : String(err)}`);
 
   const blobs = spawn(6);
+  let fg = FG;
   let stopped = false;
   let inFlight = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let last = Date.now();
-  let pending: string[] = [
-    rect("bg", 0, 0, W, H, 0, BG, 0),
-    rect("pool", 0, H - POOL_H, W, POOL_H, 0, FG + "FF", 3),
-    rect("poolglow", 0, H - POOL_H - GLOW, W, GLOW, 0, FG + GLOW_ALPHA, 1),
-  ];
+  /** Elements drawn once: background and pool. */
+  let statics: string[] = [];
+  let pending: string[] = [];
+  let backoff = 0;
 
   let ticks = 0;
   let sends = 0;
@@ -97,11 +107,16 @@ function main(): void {
     })
       .then((res) => {
         if (!res.ok) throw new Error(`draw HTTP ${res.status}`);
+        backoff = 0;
         return 0;
       })
       .catch((err) => {
+        // The screen may be held by a higher priority app, e.g. right after launch or during a BUSY session: redraw everything once it is back.
         report(err);
-        return ERROR_BACKOFF_MS;
+        backoff = backoff ? Math.min(backoff * 2, ERROR_BACKOFF_MAX_MS) : ERROR_BACKOFF_MS;
+        pending = statics.slice();
+        drawn.fill(-1);
+        return backoff;
       })
       .then((delay) => {
         drawMs += Date.now() - start;
@@ -120,7 +135,7 @@ function main(): void {
     step(blobs, Math.min((start - last) / 1000, 0.1));
     last = start;
     if (!inFlight) {
-      moved(blobs, pending);
+      moved(blobs, fg, pending);
       if (pending.length > 0) {
         send(pending);
         pending = [];
@@ -141,7 +156,24 @@ function main(): void {
     if (timer === undefined) timer = setTimeout(tick, Math.max(0, TICK_MS - (end - start)));
   }
 
-  tick();
+  void loadValues(APP, SETTINGS_VERSION)
+    .catch((err) => {
+      report(err);
+      return null;
+    })
+    .then((values) => {
+      if (stopped) return;
+      fg = color(values?.foreground, FG);
+      const bg = color(values?.background, BG);
+      statics = [
+        rect("bg", 0, 0, W, H, 0, bg + "FF", 0),
+        rect("pool", 0, H - POOL_H, W, POOL_H, 0, fg + "FF", 3),
+        rect("poolglow", 0, H - POOL_H - GLOW, W, GLOW, 0, fg + GLOW_ALPHA, 1),
+      ];
+      pending = statics.slice();
+      last = Date.now();
+      tick();
+    });
 
   const unbind = listen("input", (event) => {
     if (stopped || event.key !== "back" || event.action !== "short") return;

@@ -88,12 +88,12 @@ When in doubt, choose the cheaper option: a slower refresh, fewer requests, less
 - Colors are `#RRGGBBAA`.
 - `listen("input", handler)` delivers `ok`, `start` and `back` with a `press`, `release`, `short`, `long` or `repeat` action, and `encoder` with a direction and a `delta` of `1` or `-1`. It returns an unbind function.
 - **Use `short` as the default button action, not `press`.** `short` fires once, after a normal press and release; `press` fires immediately on key down and is followed by `short` on release, so treating `press` as a tap reacts before the gesture is complete and can double-fire. Use `long` and `repeat` for hold gestures, and `press`/`release` only when the down and up edges matter.
-- Settings are described in `src/appmeta/settings.json`. Read them with `loadValues()` from `@shared/settings` and fall back to the defaults in code when it returns `null`; persist with `saveValues()`. Do not put secrets in settings files.
+- Settings are described in `src/appmeta/settings.json`. Read them with `loadValues(APP, version)` from `@shared/settings` and fall back to the defaults in code when it returns `null` or rejects. Apps cannot write their settings; the user changes them on the device or in the web interface, and new values apply on the next launch. `color` and `geolocation` fields can only be edited in the web interface. Do not put secrets in settings files.
 
 ## Code rules
 
 - The runtime is not Node.js and not a browser: no `fs`, `path`, `process`, `document` or `window`. `console`, `fetch` with `Request`/`Response`/`Headers`/`URL`, timers, `localStorage`, `Date`, `JSON` and standard ECMAScript are available.
-- `localStorage` persists small values per app, but every `setItem` rewrites the whole store to flash. Keep values small and writes rare; use `@shared/settings` for user-visible settings.
+- `localStorage` persists small values per app, but every `setItem` rewrites the whole store to flash. Keep values small and writes rare; use settings for anything the user configures.
 - `src/` is the app and the only folder the build scans. `shared/` holds app-level helpers imported as `@shared/*`. The entry point must stay named `main.ts` or `main.js`.
 - TypeScript is strict when the app is written in `.ts`; run `npm run typecheck`. The entry point may be plain JavaScript (`src/main.js`) instead.
 - Third-party packages must run in this runtime: no Node built-ins and no DOM. Prefer `@busy-app/busy-lib` and the existing `@shared/*` helpers over adding dependencies.

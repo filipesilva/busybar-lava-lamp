@@ -134,7 +134,7 @@ To give the app a settings screen, add `src/appmeta/settings.json` describing th
 ```ts
 import { loadValues } from "@shared/settings";
 
-const values = await loadValues();
+const values = await loadValues(manifest.id, 1); // 1: "version" in settings.json
 ```
 
-`loadValues()` returns `null` when nothing is stored yet — use the defaults.
+`loadValues()` reads `GET /api/apps/settings`. It returns `null` when the stored values belong to another settings `version`, and rejects when the request fails; use the defaults in both cases. Apps cannot write their settings.

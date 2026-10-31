@@ -111,7 +111,7 @@ User-facing guides. Every page has a markdown version: add `.md` to the URL. The
 
 ## Known mismatches
 
-- `shared/settings.ts` reads a global named `Settings`. The runtime does not provide one (checked in `js_runner/` on both `1.3.1` and `dev`), so `loadValues()` always returns `null`. The documented way to read settings is `device.AppsSettingsGet({ app_id })`, which calls `GET /api/apps/settings`. Apps can read settings but not write them, so `saveValues()` does nothing.
+- The template's `shared/settings.ts` read a global named `Settings`, which the runtime does not provide (checked in `js_runner/` on both `1.3.1` and `dev`). This repo's version uses `device.AppsSettingsGet({ app_id })` (`GET /api/apps/settings`) instead. Apps can read settings but not write them.
 - `AGENTS.md` says encoder events have "a direction". In practice that is `action: "clockwise" | "counterclockwise"`, plus `delta: 1 | -1`.
 - A long press on `back` force-quits the app in firmware. The app never receives it.
 - The manifest has `api_version: "1.0.0"`. The device is at `27.14.0`, and the busy-tools scaffold suggests `27.12.0`. Set it to the lowest version that has the features we use.

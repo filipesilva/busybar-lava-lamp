@@ -1,0 +1,41 @@
+{
+  "format_version": 1,
+  "version": 3,
+  "fields": {
+    "foreground": {
+      "type": "enum",
+      "label": "Lava",
+      "description": "Colour of the lava",
+      "default": "#FF1800",
+      "options": [
+        { "value": "#FF1800", "label": "Red" },
+        { "value": "#FF5000", "label": "Orange" },
+        { "value": "#FFB000", "label": "Yellow" },
+        { "value": "#40FF00", "label": "Lime" },
+        { "value": "#00FF40", "label": "Green" },
+        { "value": "#00C8FF", "label": "Cyan" },
+        { "value": "#1030FF", "label": "Blue" },
+        { "value": "#8000FF", "label": "Purple" },
+        { "value": "#FF0080", "label": "Pink" },
+        { "value": "#FFFFFF", "label": "White" }
+      ]
+    },
+    "background": {
+      "type": "enum",
+      "label": "Background",
+      "description": "Colour behind the lava",
+      "default": "#280000",
+      "options": [
+        { "value": "#000000", "label": "Black" },
+        { "value": "#280000", "label": "Dark red" },
+        { "value": "#281000", "label": "Dark orange" },
+        { "value": "#002808", "label": "Dark green" },
+        { "value": "#001828", "label": "Dark cyan" },
+        { "value": "#000830", "label": "Dark blue" },
+        { "value": "#180030", "label": "Dark purple" },
+        { "value": "#280014", "label": "Dark pink" },
+        { "value": "#181818", "label": "Dark grey" }
+      ]
+    }
+  }
+}
