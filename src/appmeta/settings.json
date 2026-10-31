@@ -36,6 +36,19 @@
         { "value": "#280014", "label": "Dark pink" },
         { "value": "#181818", "label": "Dark grey" }
       ]
+    },
+    "speed": {
+      "type": "enum",
+      "label": "Speed",
+      "description": "How fast the lava flows",
+      "default": "0.4",
+      "options": [
+        { "value": "0.2", "label": "Very slow" },
+        { "value": "0.3", "label": "Slow" },
+        { "value": "0.4", "label": "Normal" },
+        { "value": "1", "label": "Fast" },
+        { "value": "2.5", "label": "Very fast" }
+      ]
     }
   }
 }

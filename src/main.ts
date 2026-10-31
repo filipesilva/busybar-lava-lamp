@@ -14,6 +14,7 @@ const SETTINGS_VERSION = 3;
 /** Defaults for the settings, as #RRGGBB. */
 const BG = "#280000";
 const FG = "#FF1800";
+const SPEED = 0.4;
 const GLOW_ALPHA = "40";
 /** Opacity steps of the leading edge, which fades in so blobs move by less than a pixel. */
 const EDGE_ALPHAS = ["00", "40", "80", "C0"];
@@ -88,6 +89,7 @@ function main(): void {
   const blobs = spawn(6);
   const ctl = controls();
   let fg = FG;
+  let speed = SPEED;
   let stopped = false;
   let inFlight = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -140,7 +142,7 @@ function main(): void {
     timer = undefined;
     if (stopped) return;
     const start = Date.now();
-    step(blobs, ctl, Math.min((start - last) / 1000, 0.1));
+    step(blobs, ctl, Math.min(((start - last) / 1000) * speed, 0.15));
     last = start;
     if (!inFlight) {
       moved(blobs, fg, pending);
@@ -177,6 +179,7 @@ function main(): void {
       if (stopped) return;
       fg = color(values?.foreground, FG);
       const bg = color(values?.background, BG);
+      speed = Number(values?.speed) || SPEED;
       statics = [
         rect("bg", 0, 0, W, H, 0, bg + "FF", 0),
         rect("pool", 0, H - POOL_H, W, POOL_H, 0, fg + "FF", 3),
