@@ -66,6 +66,12 @@ These are microbenchmarks on firmware 1.3.1. JerryScript is an interpreter and i
 
 Avoid per-pixel work in JS. 1152 pixels × a few operations already takes more than 100 ms.
 
+### Frame budget
+
+The app ticks every 33 ms (`TICK_MS`). A tick runs the physics and builds the changed elements, and it must finish well inside that budget. The physics steps by the real time that passed, so a slow tick does not slow the lava. Instead the motion gets choppier, and the busy JS thread delays draws and input. With 6 blobs a tick takes about 18–20 ms. 7 blobs took about 27 ms, too close. Draws are sent asynchronously, one at a time, and take about 35 ms each, so the screen updates about 8–12 times a second.
+
+Check the tick time with `STATS` after any change to the physics, the blob count or the drawing.
+
 ## 2. Firmware repo: `../busybar-firmware`
 
 The reference for the JS runtime. The checkout is on `dev`, which is a few commits past the device. To read what the device runs, use `git show 1.3.1:<path>`. To see what changed since then, use `git log 1.3.1..dev -- applications/services/js_runner applications/services/web_server/openapi`.
