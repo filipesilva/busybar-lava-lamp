@@ -38,6 +38,7 @@ Each step below was tried on the device.
 - `node tools/sim.ts <check> [runs]` runs the physics in `src/lava.ts` at the bar's tick rate and Normal speed, and prints numbers: `life` (blob count, snaps, merges, splits; stalls), `clump` (overlapping and stacked blobs), `dwell` (time at the top and in the pool), `land` (temperature and squash on landing), `settle` (heater off), `spin` (after the dial). The header of the file says what each prints. Add a check when a new behaviour needs measuring.
 - `node tools/sheet.mjs out.png [frames] [interval_ms] [scale]` takes screenshots over time and stacks them in one PNG.
 - `tools/log.sh [pattern] [lines]` prints matching lines from the bar's log.
+- `node tools/icons.mjs` draws the app icons into `src/appmeta/`: the 8×8 colour front icon and the 11×11 greyscale back icon. Edit the blobs and colours in the script, not the PNGs.
 - `STATS` in `src/main.ts`: set it to `true` to log draws/s, elements per draw, ticks/s, and the average tick and draw times every 5 s. Read them with `tools/log.sh draws/s`. The build drops this code while it is `false`.
 
 The device tools use `BUSY_ADDR`, `10.0.4.20` by default.
