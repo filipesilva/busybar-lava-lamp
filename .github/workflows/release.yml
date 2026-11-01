@@ -1,4 +1,5 @@
-# Tag 0.1.0 → release with <id>-<version>.tgz attached, whether the tag is pushed from a console or made by a release in the GitHub UI.
+# Tag 0.1.0 → draft release with <id>-<version>.tgz attached, whether the tag is pushed from a console or made by a release in the GitHub UI.
+# Review the draft on GitHub, add notes, and publish it.
 # The tag must match the version in src/appmeta/manifest.json, and the manifest must carry an api_version.
 
 name: Release
@@ -79,5 +80,6 @@ jobs:
               "dist/${{ steps.manifest.outputs.archive }}" \
               --title "$GITHUB_REF_NAME" \
               --notes-file "$RUNNER_TEMP/details.md" \
-              --generate-notes
+              --generate-notes \
+              --draft
           fi

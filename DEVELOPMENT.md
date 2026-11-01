@@ -114,7 +114,7 @@ git push && git push --tags
 
 `npm version` bumps `package.json` and `package-lock.json`, copies the version into `src/appmeta/manifest.json` (`tools/version.mjs`), commits it as `chore: release <version>`, and tags it without a `v` (`.npmrc`). It needs a clean working tree.
 
-Pushing a git tag matching the manifest `version` (e.g. `0.1.0`) builds the app and attaches `io.filipesilva.lava-lamp-<version>.tgz` to a GitHub release. The release notes open with the app's name, id, version and API version. The release fails when the tag differs from the manifest `version`. The archive gets a signed build provenance attestation; check a downloaded one with `gh attestation verify <archive> -R filipesilva/busybar-lava-lamp`.
+Pushing a git tag matching the manifest `version` (e.g. `0.1.0`) builds the app and attaches `io.filipesilva.lava-lamp-<version>.tgz` to a draft GitHub release. Review the draft, add notes, and publish it; the README's install link points at the latest published release. The release notes open with the app's name, id, version and API version. The release fails when the tag differs from the manifest `version`. The archive gets a signed build provenance attestation; check a downloaded one with `gh attestation verify <archive> -R filipesilva/busybar-lava-lamp`.
 
 ## Manifest
 
