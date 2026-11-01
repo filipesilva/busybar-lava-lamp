@@ -1,0 +1,13 @@
+diff --git a/node_modules/@busy-app/cli/dist/lib/build.js b/node_modules/@busy-app/cli/dist/lib/build.js
+index 0dadafa..66ccd4d 100644
+--- a/node_modules/@busy-app/cli/dist/lib/build.js
++++ b/node_modules/@busy-app/cli/dist/lib/build.js
+@@ -181,7 +181,7 @@ export async function build(project, opts = {}) {
+     let result = outDir;
+     if (emit !== 'dir') {
+         // Packed from destDir so the archive holds the <id>/ folder itself.
+-        execFileSync('tar', ['-czf', archive, '-C', destDir, manifest.id], { stdio: 'inherit' });
++        execFileSync('tar', ['--format', 'ustar', '-czf', archive, '-C', destDir, manifest.id], { stdio: 'inherit' });
+         if (emit === 'tgz')
+             rmSync(outDir, { recursive: true, force: true });
+         result = archive;
