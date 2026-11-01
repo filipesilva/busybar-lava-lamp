@@ -9,6 +9,7 @@ An interactive lava lamp for the [BUSY Bar](https://busy.app). Warm wax rises fr
 You need BUSY Bar firmware 1.3.1 or later.
 
 1. Download `io.filipesilva.lava-lamp-<version>.tgz` from the [latest release](https://github.com/filipesilva/busybar-lava-lamp/releases/latest).
+   In Safari, right-click the file and choose **Download Linked File** to prevent auto-unpacking the `.tgz` into a `.tar`.
 2. Connect the BUSY Bar to your computer by USB and open [http://10.0.4.20](http://10.0.4.20). Over Wi-Fi, use the bar's address on your network instead.
 3. Go to the **Apps** tab and click **＋Add app**.
 4. Click **Select file**, choose the `.tgz` file, and click **Upload**.
