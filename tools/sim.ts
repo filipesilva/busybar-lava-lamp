@@ -10,14 +10,14 @@
 //   settle  blobs 30 s after the heater goes off.
 //   spin    blobs every 10 s after spinning the dial 10 clicks/s for 4 s.
 //   paths   % of rising and of falling blobs in the middle half of the lamp (50% = no preference).
-import { H, POOL_H, controls, spawn, step, turnDial, type Blob, type Controls } from "../src/lava.ts";
+import { BLOBS, H, POOL_H, controls, spawn, step, turnDial, type Blob, type Controls } from "../src/lava.ts";
 
 /** Seconds per tick measured on the bar, and the Normal speed setting. */
 const TICK = 0.043;
 const SPEED = 0.4;
 
 function run(seconds: number, each: (t: number, blobs: Blob[], c: Controls) => void): void {
-  const blobs = spawn(6);
+  const blobs = spawn(BLOBS);
   const c = controls();
   for (let t = 0; t < seconds; t += TICK) {
     step(blobs, c, TICK * SPEED);

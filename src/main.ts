@@ -1,6 +1,6 @@
 import manifest from "./appmeta/manifest.json";
 import { loadValues } from "@shared/settings";
-import { H, NECK_MAX, POOL_H, W, controls, pressPush, releasePush, spawn, step, turnDial, type Blob } from "./lava";
+import { BLOBS, H, NECK_MAX, POOL_H, W, controls, pressPush, releasePush, spawn, step, turnDial, type Blob } from "./lava";
 
 const APP = manifest.id;
 const DRAW_URL = `http://${__BUSY_ADDR__}/api/display/draw`;
@@ -145,7 +145,7 @@ function main(): void {
   const report = (err: unknown) =>
     console.error(`${APP}: ${err instanceof Error ? err.message : String(err)}`);
 
-  const blobs = spawn(6);
+  const blobs = spawn(BLOBS);
   const ctl = controls();
   let fg = FG;
   let colors = palette(FG);

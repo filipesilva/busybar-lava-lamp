@@ -1,6 +1,7 @@
 export const W = 72;
 export const H = 16;
 export const POOL_H = 2;
+export const BLOBS = 6;
 
 export type Blob = {
   x: number;
