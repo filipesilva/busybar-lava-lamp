@@ -5,6 +5,8 @@ import { BLOBS, H, NECK_MAX, POOL_H, W, controls, pressPush, releasePush, spawn,
 const APP = manifest.id;
 const DRAW_URL = `http://${__BUSY_ADDR__}/api/display/draw`;
 const TICK_MS = 33;
+/** Log draw and tick rates every STATS_MS, for tuning on the device. */
+const STATS = false;
 const STATS_MS = 5000;
 const ERROR_BACKOFF_MS = 1000;
 const ERROR_BACKOFF_MAX_MS = 8000;
@@ -169,8 +171,10 @@ function main(): void {
   function send(elements: string[]): void {
     inFlight = true;
     const start = Date.now();
-    sends++;
-    sent += elements.length;
+    if (STATS) {
+      sends++;
+      sent += elements.length;
+    }
     fetch(DRAW_URL, {
       method: "POST",
       body: `{"application_name":"${APP}","priority":50,"elements":[${elements.join(",")}]}`,
@@ -189,7 +193,7 @@ function main(): void {
         return backoff;
       })
       .then((delay) => {
-        drawMs += Date.now() - start;
+        if (STATS) drawMs += Date.now() - start;
         inFlight = false;
         if (delay && !stopped) {
           if (timer !== undefined) clearTimeout(timer);
@@ -212,9 +216,11 @@ function main(): void {
       }
     }
     const end = Date.now();
-    computeMs += end - start;
-    ticks++;
-    if (end - statsAt >= STATS_MS) {
+    if (STATS) {
+      computeMs += end - start;
+      ticks++;
+    }
+    if (STATS && end - statsAt >= STATS_MS) {
       const secs = (end - statsAt) / 1000;
       console.info(
         `${APP}: ${(sends / secs).toFixed(1)} draws/s, ${(sent / Math.max(sends, 1)).toFixed(1)} el/draw, ` +

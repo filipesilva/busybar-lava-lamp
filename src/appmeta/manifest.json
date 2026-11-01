@@ -3,7 +3,7 @@
   "id": "io.filipesilva.lava-lamp",
   "name": "Lava Lamp",
   "version": "0.1.0",
-  "api_version": "1.0.0",
+  "api_version": "27.12.0",
   "description": "Interactive lava lamp on your Busy Bar",
   "author": "Filipe Silva"
 }

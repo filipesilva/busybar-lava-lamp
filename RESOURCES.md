@@ -38,6 +38,7 @@ Each step below was tried on the device.
 - `node tools/sim.ts <check> [runs]` runs the physics in `src/lava.ts` at the bar's tick rate and Normal speed, and prints numbers: `life` (blob count, snaps, merges, splits; stalls), `clump` (overlapping and stacked blobs), `dwell` (time at the top and in the pool), `land` (temperature and squash on landing), `settle` (heater off), `spin` (after the dial). The header of the file says what each prints. Add a check when a new behaviour needs measuring.
 - `node tools/sheet.mjs out.png [frames] [interval_ms] [scale]` takes screenshots over time and stacks them in one PNG.
 - `tools/log.sh [pattern] [lines]` prints matching lines from the bar's log.
+- `STATS` in `src/main.ts`: set it to `true` to log draws/s, elements per draw, ticks/s, and the average tick and draw times every 5 s. Read them with `tools/log.sh draws/s`. The build drops this code while it is `false`.
 
 The device tools use `BUSY_ADDR`, `10.0.4.20` by default.
 
@@ -126,5 +127,5 @@ User-facing guides. Every page has a markdown version: add `.md` to the URL. The
 - The template's `shared/settings.ts` read a global named `Settings`, which the runtime does not provide (checked in `js_runner/` on both `1.3.1` and `dev`). This repo's version uses `device.AppsSettingsGet({ app_id })` (`GET /api/apps/settings`) instead. Apps can read settings but not write them.
 - `AGENTS.md` says encoder events have "a direction". In practice that is `action: "clockwise" | "counterclockwise"`, plus `delta: 1 | -1`.
 - A long press on `back` force-quits the app in firmware. The app never receives it.
-- The manifest has `api_version: "1.0.0"`. The device is at `27.14.0`, and the busy-tools scaffold suggests `27.12.0`. Set it to the lowest version that has the features we use.
+- The manifest `api_version` is `27.12.0`: the first version that sends `short` to apps (before it, only `press` and `release`; see firmware commit `e0866814`). Rectangles came in `24.0.0` and `GET /api/apps/settings` in `27.9.0`. Firmware checks `api_version` only from `27.13.0`.
 - The HTTP server handles requests one at a time. Each redraw goes through it, so the safe frame rate has to be measured on the device.
