@@ -12,7 +12,6 @@
         { "value": "#FF5000", "label": "Orange" },
         { "value": "#FFB000", "label": "Yellow" },
         { "value": "#40FF00", "label": "Lime" },
-        { "value": "#00FF40", "label": "Green" },
         { "value": "#00C8FF", "label": "Cyan" },
         { "value": "#1030FF", "label": "Blue" },
         { "value": "#8000FF", "label": "Purple" },
