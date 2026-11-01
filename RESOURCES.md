@@ -37,6 +37,10 @@ Each step below was tried on the device.
 
 - `node tools/sim.ts <check> [runs]` runs the physics in `src/lava.ts` at the bar's tick rate and Normal speed, and prints numbers: `life` (blob count, snaps, merges, splits; stalls), `clump` (overlapping and stacked blobs), `dwell` (time at the top and in the pool), `land` (temperature and squash on landing), `settle` (heater off), `spin` (after the dial). The header of the file says what each prints. Add a check when a new behaviour needs measuring.
 - `node tools/sheet.mjs out.png [frames] [interval_ms] [scale]` takes screenshots over time and stacks them in one PNG.
+- `node tools/led.mjs out.png` takes one screenshot and draws it as round LEDs, like the web dashboard. The README images use this look.
+- `node tools/colours.mjs outdir [candidates]` makes the README colour images: it runs the app with each lava colour and each background, saves a few LED frames of each and a contact sheet, then restores the settings. Pick a frame per colour and copy it into `media/colours/`.
+- `node tools/gif.mjs out.gif seconds [hz]` records the screen as an animated GIF with the LED look, at the real speed. Polling at 15 Hz catches about 10 of the app's 8–12 draws a second without slowing it. Needs ffmpeg.
+- `node tools/grid.mjs out.png columns in.png...` joins LED images into one grid with no gaps. The README colour grids are `media/lava-colours.png` and `media/backgrounds.png`, built from `media/colours/` in the order of `settings.json`.
 - `tools/log.sh [pattern] [lines]` prints matching lines from the bar's log.
 - `node tools/icons.mjs` draws the app icons into `src/appmeta/`: the 8×8 colour front icon and the 11×11 greyscale back icon. Edit the blobs and colours in the script, not the PNGs.
 - `STATS` in `src/main.ts`: set it to `true` to log draws/s, elements per draw, ticks/s, and the average tick and draw times every 5 s. Read them with `tools/log.sh draws/s`. The build drops this code while it is `false`.
@@ -46,6 +50,34 @@ The device tools use `BUSY_ADDR`, `10.0.4.20` by default.
 The loop that worked: reproduce or tune a physics change with `tools/sim.ts` first, as many runs are cheap and the numbers are comparable. Then build, install and run on the bar, check the look with `tools/sheet.mjs` (for example, around a key press sent with `/api/input`), and check `tools/log.sh` for errors.
 
 `console.log` is logged at debug level, which the log buffer does not keep. Use `console.info` or `console.error`. Their lines are tagged with the app id (see `applications/system/js_app_launcher/scenes/js_app_launcher_scene_run.c`).
+
+### README media
+
+The images in `media/` are made on the bar with the tools above, at the default settings (red lava, black background, Normal speed) unless said otherwise. Set them in the web interface, or with `PUT /api/apps/settings?app_id=io.filipesilva.lava-lamp` and a body like `{"version":4,"values":{"foreground":"#FF1800","background":"#000000","speed":"0.4"}}` (the version is the one in `settings.json`). Give the lava 30 s after launch to leave its random start.
+
+- **Colour grids** (`lava-colours.png`, `backgrounds.png`): `node tools/colours.mjs <dir>` sets the colours itself. Pick a frame per colour from `<dir>/sheet.png`, copy it into `media/colours/` without the `-<i>`, and rebuild both grids with `tools/grid.mjs`, 3 columns, in the order of `settings.json`. The black background uses `lava-red.png`.
+- **Running** (`running.gif`): `node tools/gif.mjs media/running.gif 15`.
+- **Push** (`push.gif`): needs a person, because `/api/input` can only tap, and taps are too short to show the push. Record 25 s with `node tools/gif.mjs push-take.gif 25` while someone holds the big button for 5 s, starting about 3 s in. Then trim to the press and the wave after it, re-encoding with the same filters as `tools/gif.mjs`:
+
+  ```sh
+  ffmpeg -ss 3 -t 17 -i push-take.gif -vf "split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=none:diff_mode=rectangle" -fps_mode passthrough -loop 0 media/push.gif
+  ```
+
+- **Shear** (`shear.gif`): record 12 s and click the dial 8 times clockwise 2 s in:
+
+  ```sh
+  (sleep 2; for i in 1 2 3 4 5 6 7 8; do curl -s -X POST "http://10.0.4.20/api/input?key=up" >/dev/null; sleep 0.12; done) &
+  node tools/gif.mjs media/shear.gif 12; wait
+  ```
+
+- **Heater** (`heater.gif`): record 27 s, press OK 2 s in to turn the heater off and again 12 s later to turn it back on:
+
+  ```sh
+  (sleep 2; curl -s -X POST "http://10.0.4.20/api/input?key=ok" >/dev/null; sleep 12; curl -s -X POST "http://10.0.4.20/api/input?key=ok" >/dev/null) &
+  node tools/gif.mjs media/heater.gif 27; wait
+  ```
+
+Record a few takes and keep the one where most blobs are in the air. Check a GIF quickly by pulling out frames: `ffmpeg -i x.gif -vf "select='eq(n\,10)+eq(n\,60)',tile=1x2" -frames:v 1 x.png`.
 
 ### Measured on the device
 
