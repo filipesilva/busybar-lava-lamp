@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "version": 3,
+  "version": 4,
   "fields": {
     "foreground": {
       "type": "enum",
@@ -27,14 +27,14 @@
       "default": "#000000",
       "options": [
         { "value": "#000000", "label": "Black" },
-        { "value": "#280000", "label": "Dark red" },
-        { "value": "#281000", "label": "Dark orange" },
-        { "value": "#002808", "label": "Dark green" },
-        { "value": "#001828", "label": "Dark cyan" },
-        { "value": "#000830", "label": "Dark blue" },
-        { "value": "#180030", "label": "Dark purple" },
-        { "value": "#280014", "label": "Dark pink" },
-        { "value": "#181818", "label": "Dark grey" }
+        { "value": "#500000", "label": "Dark red" },
+        { "value": "#502000", "label": "Dark orange" },
+        { "value": "#005010", "label": "Dark green" },
+        { "value": "#003050", "label": "Dark cyan" },
+        { "value": "#001060", "label": "Dark blue" },
+        { "value": "#300060", "label": "Dark purple" },
+        { "value": "#500028", "label": "Dark pink" },
+        { "value": "#303030", "label": "Dark grey" }
       ]
     },
     "speed": {

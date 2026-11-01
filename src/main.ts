@@ -12,7 +12,7 @@ const ERROR_BACKOFF_MS = 1000;
 const ERROR_BACKOFF_MAX_MS = 8000;
 
 /** "version" in settings.json. */
-const SETTINGS_VERSION = 3;
+const SETTINGS_VERSION = 4;
 /** Defaults for the settings, as #RRGGBB. */
 const BG = "#000000";
 const FG = "#FF1800";
