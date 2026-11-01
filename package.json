@@ -25,5 +25,6 @@
   },
   "dependencies": {
     "@busy-app/busy-lib": "^0.21.1"
-  }
+  },
+  "license": "MIT"
 }
