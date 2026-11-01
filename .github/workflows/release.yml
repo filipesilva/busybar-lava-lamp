@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v5
 
@@ -51,6 +53,11 @@ jobs:
       - run: npm run typecheck
 
       - run: npm run build -- --tgz-name "{id}-{version}.tgz"
+
+      # Signed provenance for the archive: check it with `gh attestation verify <archive> -R <owner>/<repo>`.
+      - uses: actions/attest@v4
+        with:
+          subject-path: dist/${{ steps.manifest.outputs.archive }}
 
       # A release made from the UI already exists by the time the tag push gets here: attach the archive to it and keep whatever notes were written by hand, below the app's details.
       - name: Publish the release
