@@ -12,7 +12,8 @@
     "app:uninstall": "busy-cli app uninstall",
     "app:run": "busy-cli app run",
     "app:stop": "busy-cli app stop",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "version": "node tools/version.mjs && git add src/appmeta/manifest.json"
   },
   "engines": {
     "node": ">=24 <26"
